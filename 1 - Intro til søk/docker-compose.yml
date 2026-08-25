@@ -1,0 +1,57 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:3.8.0
+    container_name: bekk-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - http.cors.allow-headers=X-Requested-With,Content-Type,Content-Length
+      - http.cors.allow-credentials=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - bekk-net
+
+  indexer:
+    build: ./indexer
+    container_name: bekk-indexer
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - bekk-net
+
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:3.8.0
+    container_name: bekk-dashboards
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      indexer:
+        condition: service_completed_successfully
+    networks:
+      - bekk-net
+
+networks:
+  bekk-net:
+    driver: bridge
+
+volumes:
+  opensearch-data:
